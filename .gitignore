@@ -1,0 +1,7 @@
+node_modules/
+.env
+canvas_registry.json
+output/
+logs/
+.claude/
+src/test-*.js
