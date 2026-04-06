@@ -6,6 +6,7 @@ module.exports = {
     cwd: __dirname,
     env: {
       NODE_ENV: 'production',
+      TZ: 'Asia/Seoul',
     },
     // 로그
     log_date_format: 'YYYY-MM-DD HH:mm:ss',

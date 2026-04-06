@@ -263,14 +263,14 @@ if (args.cronMode) {
   console.log(`   채널: 인바운드 ${CHANNELS.인바운드} / 채널세일즈 ${CHANNELS.채널}`);
   console.log(`   DM: ${SEND_DM ? 'ON' : 'OFF'}\n`);
 
-  // 오전 9시 (KST = UTC+9 → UTC 0시)
-  cron.schedule('0 0 * * 1-5', () => {
+  // 오전 9시 KST (월~금)
+  cron.schedule('0 9 * * 1-5', () => {
     console.log(`\n⏰ [${new Date().toISOString()}] 오전 9시 실행`);
     run({ testMode: args.testMode }).catch(console.error);
   }, { timezone: 'Asia/Seoul' });
 
-  // 오후 2시 (KST)
-  cron.schedule('0 5 * * 1-5', () => {
+  // 오후 2시 KST (월~금)
+  cron.schedule('0 14 * * 1-5', () => {
     console.log(`\n⏰ [${new Date().toISOString()}] 오후 2시 실행`);
     run({ testMode: args.testMode }).catch(console.error);
   }, { timezone: 'Asia/Seoul' });
