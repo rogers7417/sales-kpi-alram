@@ -242,8 +242,12 @@ function extractTMData(member, csData) {
   const frtData = (leadsByOwner.frt?.byOwner || []).find(o => o.name === member.name);
   const notConverted = (leadsByOwner.notConverted?.byOwner || []).find(o => o.owner === member.name);
 
-  // 미전환 리드 상태별 분류
-  const allNotConverted = notConverted?.leads || [];
+  // 미전환 리드 상태별 분류 (name이 null/없음인 건 "이름미확인"으로 표시)
+  const cleanName = (l) => ({
+    ...l,
+    name: (l.name && l.name !== 'null' && l.name !== '-') ? l.name : '이름미확인',
+  });
+  const allNotConverted = (notConverted?.leads || []).map(cleanName);
   const retouchLeads = allNotConverted.filter(l => l.status === '리터치예정' || l.status === '고민중' || l.status === '장기부재');
   const absentLeads = allNotConverted.filter(l => l.status === '부재중');
   const closedLeads = allNotConverted.filter(l => l.status === '종료');
@@ -290,7 +294,74 @@ function extractTMData(member, csData) {
 /**
  * AM 멤버 데이터 추출
  */
-function extractAMData(member, csData) {
+/**
+ * 스코어에서 "만점에 가장 가까운 항목" 찾기
+ * — 단기 목표가 인간에게 더 효과적 (Miller's law)
+ */
+function findClosestToMax(score) {
+  if (!score?.breakdown) return null;
+  const items = Object.entries(score.breakdown)
+    .map(([key, item]) => ({
+      key,
+      label: item.label,
+      pts: item.pts,
+      max: item.max,
+      actual: item.actual,
+      target: item.target,
+      gap: item.max - item.pts, // 만점까지 남은 점수
+      ratio: item.pts / item.max,
+    }))
+    .filter(i => i.gap > 0); // 이미 만점인 건 제외
+
+  if (items.length === 0) return null;
+
+  // 만점까지 가장 가까운 (gap이 작은) 항목, 단 0점은 후순위
+  items.sort((a, b) => {
+    if (a.pts === 0 && b.pts > 0) return 1;
+    if (b.pts === 0 && a.pts > 0) return -1;
+    return a.gap - b.gap;
+  });
+
+  return items[0];
+}
+
+/**
+ * 점수 객체를 표준 형식으로 변환
+ */
+function normalizeScore(rawScore) {
+  if (!rawScore) return null;
+  return {
+    total: rawScore.total,
+    grade: rawScore.grade,
+    breakdown: rawScore.breakdown,
+    closestToMax: findClosestToMax(rawScore),
+  };
+}
+
+/**
+ * 멤버별 점수 가져오기
+ */
+function getMemberScore(inboundData, role, memberName) {
+  const scores = inboundData?.scores;
+  if (!scores) return null;
+
+  // 배열 형식 (IS/FS/BO/CS-BO)
+  if (role === 'IS') return normalizeScore((scores.is || []).find(s => s.name === memberName));
+  if (role === 'FS') return normalizeScore((scores.fs || []).find(s => s.name === memberName));
+  if (role === 'BO') return normalizeScore((scores.bo || []).find(s => s.name === memberName));
+  if (role === 'CS-BO') return normalizeScore((scores.csbo || []).find(s => s.name === memberName));
+
+  // perMember 형식 (AM/AE)
+  if (role === 'AM') return normalizeScore((scores.am?.perMember || []).find(s => s.name === memberName));
+  if (role === 'AE') return normalizeScore((scores.ae?.perMember || []).find(s => s.name === memberName));
+
+  // 팀 단위 (TM은 팀 점수만)
+  if (role === 'TM') return normalizeScore(scores.tm);
+
+  return null;
+}
+
+function extractAMData(member, csData, inboundData) {
   const leadsByOwner = csData?.summary?.channelLeadsByOwner;
   const amHeatmap = leadsByOwner?.amHeatmap;
   const kpi = csData?.kpi;
@@ -337,9 +408,19 @@ function extractAMData(member, csData) {
     .filter(p => p.thisMonthLeadCount === 0 && p.last3MonthLeadCount === 0 && p.leadCount > 0)
     .sort((a, b) => (a.lastLeadDate || '').localeCompare(b.lastLeadDate || ''));
 
+  // 스코어 (inbound 데이터에 있음)
+  const myScore = (inboundData?.scores?.am?.perMember || []).find(s => s.name === member.name);
+  const closestToMax = findClosestToMax(myScore);
+
   return {
     name: member.name,
     date: todayStr,
+    score: myScore ? {
+      total: myScore.total,
+      grade: myScore.grade,
+      breakdown: myScore.breakdown,
+      closestToMax,
+    } : null,
     team: {
       leadsDailyAvg: kpi?.am?.leadsDailyAvg,
       leadsThisMonth: kpi?.am?.leadsThisMonth,
@@ -371,7 +452,7 @@ function extractAMData(member, csData) {
 /**
  * AE 멤버 데이터 추출
  */
-function extractAEData(member, csData) {
+function extractAEData(member, csData, inboundData) {
   const kpi = csData?.kpi;
   const meetingData = (kpi?.meetingsByOwner || []).find(o => o.name === member.name);
 
@@ -401,9 +482,19 @@ function extractAEData(member, csData) {
   const unsettled = (onboarding?.partner?.list || [])
     .filter(p => p.owner === member.name && !p.settled);
 
+  // 스코어 (inbound 데이터에 있음)
+  const myScore = (inboundData?.scores?.ae?.perMember || []).find(s => s.name === member.name);
+  const closestToMax = findClosestToMax(myScore);
+
   return {
     name: member.name,
     date: todayStr,
+    score: myScore ? {
+      total: myScore.total,
+      grade: myScore.grade,
+      breakdown: myScore.breakdown,
+      closestToMax,
+    } : null,
     team: {
       mouNewThisMonth: kpi?.bd?.mouNewThisMonth,
       negoEntryThisMonth: kpi?.bd?.negoEntryThisMonth,
@@ -554,8 +645,16 @@ async function buildMessage(member, inboundData, channelData) {
   if (!extractor) return null;
 
   const dataSource = dataSources[role] === 'inbound' ? inboundData : channelData;
-  const memberData = extractor(member, dataSource);
+  // AM/AE는 score를 위해 inboundData도 함께 전달
+  const memberData = ['AM', 'AE'].includes(role)
+    ? extractor(member, dataSource, inboundData)
+    : extractor(member, dataSource);
   if (!memberData) return null;
+
+  // 모든 파트에 score 주입 (AM/AE는 이미 extractor에서 처리)
+  if (!memberData.score) {
+    memberData.score = getMemberScore(inboundData, role, member.name);
+  }
 
   const userMessage = JSON.stringify(memberData, null, 2);
   return generateMessage(systemPrompt, userMessage);
