@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node src/index.js",
     "test": "node src/index.js --test",
-    "test:member": "node src/index.js --test --member"
+    "test:member": "node src/index.js --test --member",
+    "preview": "node src/preview.js",
+    "preview:stdout": "node src/preview.js --stdout"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
