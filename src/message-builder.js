@@ -180,15 +180,26 @@ function extractBOData(member, inbound) {
     .filter(r => r.installHopeDate && r.installHopeDate <= twoWeeksStr)
     .sort(sortByInstallDate);
 
-  // 다음 과업 없는 건 (긴급 건 중)
-  const noNextTask = quoteVisit
-    .filter(r => !r.hasOpenTask)
-    .sort(sortByInstallDate);
+  // 견적 생성 후 계류 건
+  // 조건: 이번달 생성 영업기회 + 견적 단계 + 견적 발송 후 2일+ 경과 + 다음 과업 없음
+  const monthStart = todayStr.slice(0, 7) + '-01';
+  const twoDaysAgo = new Date(todayStr);
+  twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+  const twoDaysAgoStr = twoDaysAgo.toISOString().slice(0, 10);
 
-  // 마지막 터치 5일+ 경과 건
-  const staleTouched = quoteVisit
-    .filter(r => (r.daysSinceLastTask || 0) >= 5)
-    .sort((a, b) => (b.daysSinceLastTask || 0) - (a.daysSinceLastTask || 0));
+  const quoteStalled = quoteStage
+    .filter(r =>
+      r.createdDate && r.createdDate.slice(0, 10) >= monthStart &&
+      r.hasQuote && r.quoteCreatedDate && r.quoteCreatedDate.slice(0, 10) <= twoDaysAgoStr &&
+      !r.hasOpenTask
+    )
+    .sort((a, b) => (a.quoteCreatedDate || '').localeCompare(b.quoteCreatedDate || ''));
+
+  // 다음 과업 없는 건 — 단, "견적 생성 후 계류"에 포함된 건은 제외 (중복 방지)
+  const quoteStalledIds = new Set(quoteStalled.map(r => r.oppId));
+  const noNextTask = quoteVisit
+    .filter(r => !r.hasOpenTask && !quoteStalledIds.has(r.oppId))
+    .sort(sortByInstallDate);
 
   // 기타 단계 (선납금/출고/설치/계약 진행) — 요약만
   const otherStages = rawOpen.filter(r =>
@@ -212,7 +223,7 @@ function extractBOData(member, inbound) {
     contract: contractUser || {},
     urgent: urgent.slice(0, 15),
     noNextTask: noNextTask.slice(0, 10),
-    staleTouched: staleTouched.slice(0, 8),
+    quoteStalled,
     otherStagesSummary: {
       count: otherStages.length,
       stages: otherStages.reduce((acc, r) => {
@@ -226,7 +237,7 @@ function extractBOData(member, inbound) {
       visit: visitStage.length,
       urgent: urgent.length,
       noNextTask: noNextTask.length,
-      staleTouched: staleTouched.length,
+      quoteStalled: quoteStalled.length,
     },
   };
 }

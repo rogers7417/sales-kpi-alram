@@ -73,6 +73,7 @@ function parseArgs() {
     cronMode: args.includes('--cron'),
     testMode: args.includes('--test'),
     memberName: args.find(a => a.startsWith('--member='))?.split('=')[1] || null,
+    roleName: args.find(a => a.startsWith('--role='))?.split('=')[1] || null,
   };
 }
 
@@ -80,7 +81,7 @@ function parseArgs() {
  * 메인 파이프라인 실행
  */
 async function run(options = {}) {
-  const { testMode = false, memberName = null } = options;
+  const { testMode = false, memberName = null, roleName = null } = options;
   const date = getToday();
   const startTime = Date.now();
 
@@ -89,6 +90,7 @@ async function run(options = {}) {
   console.log(`🤖 모델: ${MODEL}`);
   if (testMode) console.log('🧪 테스트 모드');
   if (memberName) console.log(`👤 대상: ${memberName}`);
+  if (roleName) console.log(`🏷️  역할 필터: ${roleName}`);
   console.log(`${'━'.repeat(50)}\n`);
 
   // ── 1. 데이터 수집 ──
@@ -111,9 +113,9 @@ async function run(options = {}) {
     ...groups.csbo.map(m => ({ member: m, team: '채널' })),
   ];
 
-  const targets = memberName
-    ? allMembers.filter(t => t.member.name === memberName)
-    : allMembers;
+  let targets = allMembers;
+  if (memberName) targets = targets.filter(t => t.member.name === memberName);
+  if (roleName) targets = targets.filter(t => t.member.roles.includes(roleName));
 
   if (targets.length === 0) {
     console.log(`❌ 대상 없음${memberName ? ` (${memberName})` : ''}`);
@@ -306,6 +308,7 @@ if (args.cronMode) {
   run({
     testMode: args.testMode,
     memberName: args.memberName,
+    roleName: args.roleName,
   }).catch(err => {
     console.error('❌', err.message);
     process.exit(1);
