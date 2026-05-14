@@ -25,4 +25,31 @@ async function soqlQuery(instanceUrl, accessToken, query) {
   return res.data;
 }
 
-module.exports = { getSalesforceToken, soqlQuery };
+// 페이징 처리 (대량 쿼리)
+async function soqlQueryAll(instanceUrl, accessToken, query) {
+  let all = [];
+  let result = await soqlQuery(instanceUrl, accessToken, query);
+  all.push(...(result.records || []));
+  while (result.nextRecordsUrl) {
+    const res = await axios.get(`${instanceUrl}${result.nextRecordsUrl}`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+    });
+    result = res.data;
+    all.push(...(result.records || []));
+  }
+  return all;
+}
+
+// SObject 레코드 생성
+async function createRecord(instanceUrl, accessToken, objectName, body) {
+  const url = `${instanceUrl}/services/data/v59.0/sobjects/${objectName}`;
+  const res = await axios.post(url, body, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  return res.data;
+}
+
+module.exports = { getSalesforceToken, soqlQuery, soqlQueryAll, createRecord };
