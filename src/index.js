@@ -14,6 +14,7 @@ const cron = require('node-cron');
 const { fetchInboundKPI, fetchChannelKPI } = require('./s3-fetcher');
 const { fetchMembersByRole } = require('./members');
 const { buildMessage } = require('./message-builder');
+const { run: runAutoTask } = require('./auto-task-quote-retouch');
 const { WebClient } = require('@slack/web-api');
 const Anthropic = require('@anthropic-ai/sdk');
 const fs = require('fs');
@@ -297,7 +298,13 @@ if (args.cronMode) {
   console.log(`   채널: 인바운드 ${CHANNELS.인바운드} / 채널세일즈 ${CHANNELS.채널}`);
   console.log(`   DM: ${SEND_DM ? 'ON' : 'OFF'}\n`);
 
-  // 오전 10시 KST (월~금)
+  // 오전 9시 50분 KST (월~금) — 견적단계 해피콜 Task 자동 생성 (알람 발송 전)
+  cron.schedule('50 9 * * 1-5', () => {
+    console.log(`\n🤖 [${new Date().toISOString()}] 해피콜 Task 자동 생성`);
+    runAutoTask({ dryRun: args.testMode }).catch(console.error);
+  }, { timezone: 'Asia/Seoul' });
+
+  // 오전 10시 KST (월~금) — 개인 알람 발송
   cron.schedule('0 10 * * 1-5', () => {
     console.log(`\n⏰ [${new Date().toISOString()}] 오전 10시 실행`);
     run({ testMode: args.testMode }).catch(console.error);

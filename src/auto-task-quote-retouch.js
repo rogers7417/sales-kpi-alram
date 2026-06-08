@@ -30,11 +30,6 @@ const sf = require('./salesforce');
 const SUBJECT = '해피콜 진행';
 const LOG_DIR = path.join(__dirname, '..', 'logs', 'auto-task');
 
-const argv = process.argv.slice(2);
-const DRY_RUN = argv.includes('--dry-run');
-const sampleIdx = argv.indexOf('--sample');
-const SAMPLE = sampleIdx >= 0 ? parseInt(argv[sampleIdx + 1], 10) : null;
-
 function kstNow() {
   return new Date(Date.now() + 9 * 3600000);
 }
@@ -118,7 +113,9 @@ function writeLog(payload) {
   console.log(`  log: ${file}`);
 }
 
-async function run() {
+async function run({ dryRun = false, sample = null } = {}) {
+  const DRY_RUN = dryRun;
+  const SAMPLE = sample;
   const startedAt = new Date().toISOString();
   console.log('============================================');
   console.log('🤖 견적단계 해피콜 Task 자동 생성기');
@@ -174,4 +171,13 @@ async function run() {
   });
 }
 
-run().catch(e => { console.error('FATAL:', e.message, e.stack); process.exit(1); });
+module.exports = { run };
+
+// 직접 실행 시에만 CLI 인자 파싱 후 1회 실행
+if (require.main === module) {
+  const argv = process.argv.slice(2);
+  const dryRun = argv.includes('--dry-run');
+  const sampleIdx = argv.indexOf('--sample');
+  const sample = sampleIdx >= 0 ? parseInt(argv[sampleIdx + 1], 10) : null;
+  run({ dryRun, sample }).catch(e => { console.error('FATAL:', e.message, e.stack); process.exit(1); });
+}
